@@ -654,6 +654,12 @@ if (!class_exists('PPCH_Checklists')) {
                                 'prompt' => esc_html__('Is this content tone promotional?', 'publishpress-checklists'),
                             ]
                         ],
+                        'duplicate_nonce'     => wp_create_nonce('pp_checklists_duplicate_nonce'),
+                        'confirm_duplicate'   => esc_html__('Are you sure you want to duplicate this task?', 'publishpress-checklists'),
+                        'duplicate_success'   => esc_html__('Task duplicated successfully. The page will now reload to reflect the changes.', 'publishpress-checklists'),
+                        'duplicate_error'     => esc_html__('Error duplicating task. Please try again.', 'publishpress-checklists'),
+                        'duplicate_ajax_error' => esc_html__('AJAX error duplicating task:', 'publishpress-checklists'),
+                        'nonce_missing_error' => esc_html__('Security nonce is missing. Cannot process duplication.', 'publishpress-checklists'),
                     ]
                 );
             } elseif (isset($_GET['page']) && $_GET['page'] === 'ppch-settings') {
@@ -1276,6 +1282,122 @@ if (!class_exists('PPCH_Checklists')) {
             }
 
             $this->field_tabs = apply_filters('publishpress_checklists_filter_field_tabs', $result, $allFieldsTabs);
+        }
+
+        /**
+         * Handles AJAX request for duplicating a checklist item.
+         */
+        public function ajax_duplicate_checklist_handler()
+        {
+            if (!isset($_POST['_ajax_pp_checklists_duplicate_nonce'])) {
+                wp_send_json_error(['message' => esc_html__('Nonce not provided.', 'publishpress-checklists')], 403);
+                die();
+            }
+
+            if (!check_ajax_referer('pp_checklists_duplicate_nonce', '_ajax_pp_checklists_duplicate_nonce', false)) {
+                wp_send_json_error(['message' => esc_html__('Nonce verification failed.', 'publishpress-checklists')], 403);
+                die();
+            }
+
+            $manage_cap = apply_filters('publishpress_checklists_manage_checklist_cap', 'manage_checklists');
+            if (!current_user_can($manage_cap)) {
+                wp_send_json_error(['message' => esc_html__('User does not have permission to manage checklists.', 'publishpress-checklists')], 403);
+                die();
+            }
+
+            if (!isset($_POST['requirement_id']) || !isset($_POST['post_type'])) {
+                wp_send_json_error(['message' => esc_html__('Missing requirement_id or post_type.', 'publishpress-checklists')], 400);
+                die();
+            }
+
+            $original_id = sanitize_text_field(wp_unslash($_POST['requirement_id']));
+            // $post_type_context = sanitize_text_field(wp_unslash($_POST['post_type'])); // Not directly used for saving, but good for context if needed later.
+
+            $options = (array)get_option('publishpress_checklists_checklists_options', []);
+
+            $new_id    = '';
+            $task_type = ''; // 'custom' or 'openai'
+
+            if (strpos($original_id, 'custom_') === 0) {
+                $new_id    = uniqid('custom_');
+                $task_type = 'custom';
+            } elseif (strpos($original_id, 'openai_') === 0) {
+                $new_id    = uniqid('openai_');
+                $task_type = 'openai';
+            } else {
+                wp_send_json_error(['message' => esc_html__('Only custom or OpenAI tasks can be duplicated at this time.', 'publishpress-checklists')], 400);
+                die();
+            }
+
+            // Add the new ID to the respective items list
+            if ($task_type === 'custom') {
+                if (!isset($options['custom_items']) || !is_array($options['custom_items'])) {
+                    $options['custom_items'] = [];
+                }
+                $options['custom_items'][] = $new_id;
+            } elseif ($task_type === 'openai') {
+                if (!isset($options['openai_items']) || !is_array($options['openai_items'])) {
+                    $options['openai_items'] = [];
+                }
+                $options['openai_items'][] = $new_id;
+            }
+
+            $available_post_types = array_keys($this->get_post_types());
+
+            foreach ($available_post_types as $pt_slug) {
+                // Copy title
+                $original_title_key = $original_id . '_title';
+                $new_title_key      = $new_id . '_title';
+                if (isset($options[$original_title_key][$pt_slug])) {
+                    $options[$new_title_key][$pt_slug] = sprintf(
+                        // translators: %s is the original title of the task.
+                        esc_html__('Copy of %s', 'publishpress-checklists'),
+                        $options[$original_title_key][$pt_slug]
+                    );
+                } elseif (isset($options[$original_title_key]) && is_string($options[$original_title_key]) && !is_array($options[$original_title_key])) { 
+                    // Handle non-post-type-specific titles (older format or global setting for this specific requirement)
+                     $options[$new_title_key][$pt_slug] = sprintf(
+                        esc_html__('Copy of %s', 'publishpress-checklists'),
+                        $options[$original_title_key]
+                    );
+                }
+
+
+                // Copy rule
+                $original_rule_key = $original_id . '_rule';
+                $new_rule_key      = $new_id . '_rule';
+                if (isset($options[$original_rule_key][$pt_slug])) {
+                    $options[$new_rule_key][$pt_slug] = $options[$original_rule_key][$pt_slug];
+                } elseif (isset($options[$original_rule_key]) && is_string($options[$original_rule_key]) && !is_array($options[$original_rule_key])) {
+                     $options[$new_rule_key][$pt_slug] = $options[$original_rule_key];
+                }
+
+                // Copy editable_by
+                $original_editable_by_key = $original_id . '_editable_by';
+                $new_editable_by_key      = $new_id . '_editable_by';
+                if (isset($options[$original_editable_by_key][$pt_slug])) {
+                    $options[$new_editable_by_key][$pt_slug] = $options[$original_editable_by_key][$pt_slug];
+                } elseif (isset($options[$original_editable_by_key]) && is_array($options[$original_editable_by_key])) { // Check if it's an array for global settings
+                    $options[$new_editable_by_key][$pt_slug] = $options[$original_editable_by_key];
+                }
+
+
+                // Copy OpenAI specific settings
+                if ($task_type === 'openai') {
+                    $original_prompt_response_key = $original_id . '_prompt_response';
+                    $new_prompt_response_key      = $new_id . '_prompt_response';
+                    if (isset($options[$original_prompt_response_key][$pt_slug])) {
+                        $options[$new_prompt_response_key][$pt_slug] = $options[$original_prompt_response_key][$pt_slug];
+                    } elseif (isset($options[$original_prompt_response_key]) && is_string($options[$original_prompt_response_key]) && !is_array($options[$original_prompt_response_key])) {
+                        $options[$new_prompt_response_key][$pt_slug] = $options[$original_prompt_response_key];
+                    }
+                }
+            }
+
+            update_option('publishpress_checklists_checklists_options', (object)$options);
+
+            wp_send_json_success(['message' => esc_html__('Checklist task duplicated successfully.', 'publishpress-checklists')]);
+            die();
         }
     }
 }

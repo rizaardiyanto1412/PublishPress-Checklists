@@ -476,6 +476,54 @@
       //remove previous notice
       $('.checklists-save-notice').remove();
     });
+
+    /*----------  Duplicate item  ----------*/
+    $(document).on('click', '.pp-checklists-duplicate-button', function (event) {
+      event.preventDefault();
+
+      var $button = $(this);
+      var requirementId = $button.data('id');
+      var postType = $button.data('post-type');
+
+      if (!objectL10n_checklists_global_checklist.duplicate_nonce) {
+        alert('Error: Missing security token for duplication. Please contact support.');
+        return;
+      }
+
+      if (confirm(objectL10n_checklists_global_checklist.confirm_duplicate || 'Are you sure you want to duplicate this task?')) {
+        $.ajax({
+          url: ajaxurl, // WordPress AJAX URL
+          type: 'POST',
+          data: {
+            action: 'pp_duplicate_checklist',
+            _ajax_pp_checklists_duplicate_nonce: objectL10n_checklists_global_checklist.duplicate_nonce,
+            requirement_id: requirementId,
+            post_type: postType,
+          },
+          success: function (response) {
+            if (response.success) {
+              alert(
+                objectL10n_checklists_global_checklist.duplicate_success ||
+                  'Task duplicated successfully. The page will now reload to reflect the changes.',
+              );
+              location.reload();
+            } else {
+              var errorMessage =
+                objectL10n_checklists_global_checklist.duplicate_error || 'Error duplicating task. Please try again.';
+              if (response.data && response.data.message) {
+                errorMessage += ' Details: ' + response.data.message;
+              }
+              alert(errorMessage);
+            }
+          },
+          error: function (jqXHR, textStatus, errorThrown) {
+            var ajaxErrorMessage =
+              objectL10n_checklists_global_checklist.duplicate_ajax_error || 'AJAX error duplicating task:';
+            alert(ajaxErrorMessage + ' ' + textStatus + ' - ' + errorThrown);
+          },
+        });
+      }
+    });
   });
 
   function uidGen(len) {

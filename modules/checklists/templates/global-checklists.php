@@ -64,6 +64,7 @@
                         do_action('publishpress_checklists_tasks_list_th');
                         ?>
                         <th><?php echo esc_html($context['lang']['params']); ?></th>
+                        <th><?php echo esc_html__('Duplicate', 'publishpress-checklists'); ?></th> <!-- New Header -->
                     </tr>
                 </thead>
                 <?php
@@ -81,7 +82,7 @@
                                 $is_pro_tab = isset($tabInfo['pro']) && $tabInfo['pro'];
                                 if ($is_pro_tab && empty($pro_active)) {
                                     // Show a promo message for Pro tabs if Pro is not active
-                                    echo '<tr class="pp-checklists-requirement-row ppch-' . esc_attr($group) . '-group" data-post-type="' . esc_attr($post_type) . '"><td colspan="4" class="pp-pro-tab-promo">';
+                                    echo '<tr class="pp-checklists-requirement-row ppch-' . esc_attr($group) . '-group" data-post-type="' . esc_attr($post_type) . '"><td colspan="5" class="pp-pro-tab-promo">'; // Adjusted colspan
                                     echo esc_html__('This feature is available in the Pro version. ', 'publishpress-checklists');
                                     echo '<a href="https://publishpress.com/" target="_blank" rel="noopener">' . esc_html__('Upgrade to Pro', 'publishpress-checklists') . '</a>';
                                     echo '</td></tr>';
@@ -124,6 +125,15 @@
                                                     echo $requirement->get_setting_field_html();
                                                     ?>
                                                 </td>
+                                                <td>
+                                                    <a href="#" 
+                                                       class="button icon pp-checklists-duplicate-button" 
+                                                       data-id="<?php echo esc_attr($requirement->name); ?>"
+                                                       data-post-type="<?php echo esc_attr($post_type); ?>"
+                                                       title="<?php esc_attr_e('Duplicate this task', 'publishpress-checklists'); ?>">
+                                                        <span class="dashicons dashicons-admin-page"></span>
+                                                    </a>
+                                                </td>
                                             </tr>
                                     <?php
                                         endif;
@@ -132,7 +142,7 @@
                                 ?>
                                 <?php if ($post_type === $post_type_key && !$group_has_requirements) : ?>
                                     <tr class="pp-checklists-requirement-row ppch-<?php echo esc_attr($group); ?>-group" data-post-type="<?php echo esc_attr($post_type); ?>">
-                                        <td colspan="4" id="empty-custom-rule">
+                                        <td colspan="5" id="empty-custom-rule"> <!-- Adjusted colspan -->
                                             <?php echo esc_html_e(sprintf(__('No %s requirements for this post type.', 'publishpress-checklists'), $group)); ?>
                                         </td>
                                     </tr>
