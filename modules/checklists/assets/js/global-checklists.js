@@ -222,8 +222,49 @@
       // Get original requirement title and configuration
       var originalTitle = $originalRow.find('td:first-child input, td:first-child textarea').val() || $originalRow.find('td:first-child').text().trim();
       var originalRule = $originalRow.find('select[name*="_rule"] option:selected').val();
-      var originalMinValue = $originalRow.find('input[name*="_min"]').val() || '';
-      var originalMaxValue = $originalRow.find('input[name*="_max"]').val() || '';
+      
+      // Extract min/max values - these could be in input fields or in the label text for built-in requirements
+      var originalMinValue = '';
+      var originalMaxValue = '';
+      
+      var $minInput = $originalRow.find('input[name*="_min"]');
+      var $maxInput = $originalRow.find('input[name*="_max"]');
+      
+      if ($minInput.length > 0) {
+        originalMinValue = $minInput.val() || '';
+      }
+      
+      if ($maxInput.length > 0) {
+        originalMaxValue = $maxInput.val() || '';
+      }
+      
+      // If no input fields found, try to extract from the label text for built-in requirements
+      if (originalMinValue === '' && originalMaxValue === '') {
+        var labelText = $originalRow.find('td:first-child').text().trim();
+        
+        var minMatch = labelText.match(/(?:minimum|at least|min\.?)\s+(\d+)/i);
+        if (minMatch && minMatch[1]) {
+          originalMinValue = minMatch[1];
+        }
+        
+        var maxMatch = labelText.match(/(?:maximum|up to|max\.?)\s+(\d+)/i);
+        if (maxMatch && maxMatch[1]) {
+          originalMaxValue = maxMatch[1];
+        }
+        
+        var exactMatch = labelText.match(/exactly\s+(\d+)/i);
+        if (exactMatch && exactMatch[1]) {
+          originalMinValue = exactMatch[1];
+          originalMaxValue = exactMatch[1];
+        }
+        
+        var betweenMatch = labelText.match(/between\s+(\d+)\s+and\s+(\d+)/i);
+        if (betweenMatch && betweenMatch[1] && betweenMatch[2]) {
+          originalMinValue = betweenMatch[1];
+          originalMaxValue = betweenMatch[2];
+        }
+      }
+      
       var originalEditableBy = $originalRow.find('select[name*="_editable_by"]').val() || [];
       var originalCanIgnore = $originalRow.find('select[name*="_can_ignore"]').val() || [];
       
@@ -232,6 +273,18 @@
       var isOpenAIItem = $originalRow.find('textarea[name*="_title"]').length > 0;
       var requirementType = isOpenAIItem ? 'openai' : 'custom';
       var hasMinMax = originalMinValue !== '' || originalMaxValue !== '';
+      
+      var hasMultipleOptions = $originalRow.find('select[multiple]').length > 0;
+      var multipleValues = {};
+      
+      if (hasMultipleOptions) {
+        $originalRow.find('select[multiple]').each(function() {
+          var fieldName = $(this).attr('name').match(/\[(.*?)\]/);
+          if (fieldName && fieldName[1]) {
+            multipleValues[fieldName[1]] = $(this).val() || [];
+          }
+        });
+      }
       
       var duplicatedTitle = originalTitle + ' (Copy)';
       
@@ -258,13 +311,22 @@
           $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
         }
         
+        if (hasMultipleOptions) {
+          for (var fieldName in multipleValues) {
+            var $select = $newRow.find('select[name*="[' + fieldName + ']"]');
+            if ($select.length > 0 && multipleValues[fieldName].length > 0) {
+              $select.val(multipleValues[fieldName]);
+            }
+          }
+        }
+        
         // Re-initialize select2 for the new row
         $newRow.find('select').select2();
         
         // Show the custom group
         $('.ppch-custom-group').show();
       } else {
-        // So we'll create a custom item with similar configuration
+        // For built-in requirements, create a custom item with similar configuration
         create_row(newId, duplicatedTitle, originalRule, postType, 'custom', hasMinMax);
         
         // Set the duplicated configuration values
@@ -285,6 +347,15 @@
         
         if (originalCanIgnore && originalCanIgnore.length > 0) {
           $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
+        }
+        
+        if (hasMultipleOptions) {
+          for (var fieldName in multipleValues) {
+            var $select = $newRow.find('select[name*="[' + fieldName + ']"]');
+            if ($select.length > 0 && multipleValues[fieldName].length > 0) {
+              $select.val(multipleValues[fieldName]);
+            }
+          }
         }
         
         // Re-initialize select2 for the new row

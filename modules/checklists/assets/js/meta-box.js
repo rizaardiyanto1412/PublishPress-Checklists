@@ -103,6 +103,46 @@
    * Register validation for simple requirements
    */
   function registerSimpleValidation(requirementKey, requirementData) {
+    var elementId = '#pp-checklists-req-' + requirementKey;
+    
+    if (requirementKey.includes('featured_image')) {
+      // Featured image validation
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        var hasFeaturedImage = false;
+        
+        if (PP_Checklists.is_gutenberg_active()) {
+          hasFeaturedImage = PP_Checklists.getEditor().getEditedPostAttribute('featured_media') > 0;
+        } else {
+          hasFeaturedImage = $('#_thumbnail_id').val() > 0;
+        }
+        
+        $(elementId).trigger(
+          PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+          hasFeaturedImage
+        );
+      });
+    } else if (requirementKey.includes('image_alt')) {
+      // Image alt text validation
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        var hasAltText = false;
+        
+        if (PP_Checklists.is_gutenberg_active()) {
+          return;
+        } else {
+          var $images = $('#content_ifr').contents().find('img');
+          hasAltText = $images.length === 0 || $images.filter(function() {
+            return !$(this).attr('alt') || $(this).attr('alt').trim() === '';
+          }).length === 0;
+        }
+        
+        $(elementId).trigger(
+          PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+          hasAltText
+        );
+      });
+    } else if (requirementKey.includes('custom_item')) {
+      return;
+    }
   }
 
   /**
