@@ -64,6 +64,7 @@
                         do_action('publishpress_checklists_tasks_list_th');
                         ?>
                         <th><?php echo esc_html($context['lang']['params']); ?></th>
+                        <th><?php echo esc_html__('Actions', 'publishpress-checklists'); ?></th>
                     </tr>
                 </thead>
                 <?php
@@ -81,7 +82,7 @@
                                 $is_pro_tab = isset($tabInfo['pro']) && $tabInfo['pro'];
                                 if ($is_pro_tab && empty($pro_active)) {
                                     // Show a promo message for Pro tabs if Pro is not active
-                                    echo '<tr class="pp-checklists-requirement-row ppch-' . esc_attr($group) . '-group" data-post-type="' . esc_attr($post_type) . '"><td colspan="4" class="pp-pro-tab-promo">';
+                                    echo '<tr class="pp-checklists-requirement-row ppch-' . esc_attr($group) . '-group" data-post-type="' . esc_attr($post_type) . '"><td colspan="5" class="pp-pro-tab-promo">';
                                     echo esc_html__('This feature is available in the Pro version. ', 'publishpress-checklists');
                                     echo '<a href="https://publishpress.com/" target="_blank" rel="noopener">' . esc_html__('Upgrade to Pro', 'publishpress-checklists') . '</a>';
                                     echo '</td></tr>';
@@ -123,6 +124,8 @@
                                                     // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
                                                     echo $requirement->get_setting_field_html();
                                                     ?>
+                                                </td>
+                                                <td class="pp-checklists-task-actions">
                                                     <a href="javascript:void(0);" class="pp-checklists-duplicate-item button button-secondary" 
                                                        data-id="<?php echo esc_attr($requirement->name); ?>" 
                                                        data-post-type="<?php echo esc_attr($post_type); ?>"
@@ -138,7 +141,7 @@
                                 ?>
                                 <?php if ($post_type === $post_type_key && !$group_has_requirements) : ?>
                                     <tr class="pp-checklists-requirement-row ppch-<?php echo esc_attr($group); ?>-group" data-post-type="<?php echo esc_attr($post_type); ?>">
-                                        <td colspan="4" id="empty-custom-rule">
+                                        <td colspan="5" id="empty-custom-rule">
                                             <?php echo esc_html_e(sprintf(__('No %s requirements for this post type.', 'publishpress-checklists'), $group)); ?>
                                         </td>
                                     </tr>

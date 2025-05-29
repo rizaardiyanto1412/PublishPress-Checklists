@@ -219,41 +219,80 @@
         return;
       }
       
-      var originalTitle = $originalRow.find('td:first-child').text().trim();
+      // Get original requirement title and configuration
+      var originalTitle = $originalRow.find('td:first-child input, td:first-child textarea').val() || $originalRow.find('td:first-child').text().trim();
       var originalRule = $originalRow.find('select[name*="_rule"] option:selected').val();
       var originalMinValue = $originalRow.find('input[name*="_min"]').val() || '';
       var originalMaxValue = $originalRow.find('input[name*="_max"]').val() || '';
       var originalEditableBy = $originalRow.find('select[name*="_editable_by"]').val() || [];
       var originalCanIgnore = $originalRow.find('select[name*="_can_ignore"]').val() || [];
       
+      // Check if this is a custom item or built-in requirement
+      var isCustomItem = $originalRow.find('input[name*="_title"]').length > 0;
+      var isOpenAIItem = $originalRow.find('textarea[name*="_title"]').length > 0;
+      var requirementType = isOpenAIItem ? 'openai' : 'custom';
+      var hasMinMax = originalMinValue !== '' || originalMaxValue !== '';
+      
       var duplicatedTitle = originalTitle + ' (Copy)';
-      create_row(newId, duplicatedTitle, originalRule, postType, 'custom');
       
-      // Set the duplicated configuration values
-      var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
-      
-      $newRow.find('select[name*="_rule"]').val(originalRule);
-      
-      if (originalMinValue) {
-        $newRow.find('input[name*="_min"]').val(originalMinValue);
+      if (isCustomItem || isOpenAIItem) {
+        create_row(newId, duplicatedTitle, originalRule, postType, requirementType, hasMinMax);
+        
+        // Set the duplicated configuration values
+        var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
+        
+        $newRow.find('select[name*="_rule"]').val(originalRule);
+        
+        if (originalMinValue) {
+          $newRow.find('input[name*="_min"]').val(originalMinValue);
+        }
+        if (originalMaxValue) {
+          $newRow.find('input[name*="_max"]').val(originalMaxValue);
+        }
+        
+        if (originalEditableBy && originalEditableBy.length > 0) {
+          $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
+        }
+        
+        if (originalCanIgnore && originalCanIgnore.length > 0) {
+          $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
+        }
+        
+        // Re-initialize select2 for the new row
+        $newRow.find('select').select2();
+        
+        // Show the custom group
+        $('.ppch-custom-group').show();
+      } else {
+        // So we'll create a custom item with similar configuration
+        create_row(newId, duplicatedTitle, originalRule, postType, 'custom', hasMinMax);
+        
+        // Set the duplicated configuration values
+        var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
+        
+        $newRow.find('select[name*="_rule"]').val(originalRule);
+        
+        if (originalMinValue) {
+          $newRow.find('input[name*="_min"]').val(originalMinValue);
+        }
+        if (originalMaxValue) {
+          $newRow.find('input[name*="_max"]').val(originalMaxValue);
+        }
+        
+        if (originalEditableBy && originalEditableBy.length > 0) {
+          $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
+        }
+        
+        if (originalCanIgnore && originalCanIgnore.length > 0) {
+          $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
+        }
+        
+        // Re-initialize select2 for the new row
+        $newRow.find('select').select2();
+        
+        // Show the custom group
+        $('.ppch-custom-group').show();
       }
-      if (originalMaxValue) {
-        $newRow.find('input[name*="_max"]').val(originalMaxValue);
-      }
-      
-      if (originalEditableBy && originalEditableBy.length > 0) {
-        $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
-      }
-      
-      if (originalCanIgnore && originalCanIgnore.length > 0) {
-        $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
-      }
-      
-      // Re-initialize select2 for the new row
-      $newRow.find('select').select2();
-      
-      // Show the custom group
-      $('.ppch-custom-group').show();
     }
 
     /**
@@ -371,6 +410,26 @@
           .addClass('pp-checklists-editable-by-description')
           .text(objectL10n_checklists_global_checklist.editable_by);
         $optionsField.after($label);
+        
+        // Add min/max fields for counter-type duplicated requirements
+        if (arguments.length > 5 && arguments[5] === true) { // hasMinMax parameter
+          var $minField = $('<input type="text" />')
+            .attr('name', 'publishpress_checklists_checklists_options[' + id + '_min][' + post_type + ']')
+            .attr('class', 'pp-checklists-small-input pp-checklists-number')
+            .attr('placeholder', 'Min');
+          var $maxField = $('<input type="text" />')
+            .attr('name', 'publishpress_checklists_checklists_options[' + id + '_max][' + post_type + ']')
+            .attr('class', 'pp-checklists-small-input pp-checklists-number')
+            .attr('placeholder', 'Max');
+          
+          var $minMaxContainer = $('<div class="pp-checklists-number">').append(
+            $('<label>').text('Min'),
+            $minField,
+            $('<label>').text('Max'),
+            $maxField
+          );
+          $label.after($minMaxContainer);
+        }
       }
 
       $a = $('<a>')
