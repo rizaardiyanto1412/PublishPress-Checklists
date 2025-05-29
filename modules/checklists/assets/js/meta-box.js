@@ -1195,170 +1195,190 @@
     });
   }
 
-  /*----------  Required Tags  ----------*/
+  /*----------  Required Tags - Dynamic Validation ----------*/
 
-  if ($('#pp-checklists-req-required_tags').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      let obj = PP_Checklists.is_gutenberg_active()
-        ? PP_Checklists.getEditor().getEditedPostAttribute('tags')
-        : $('.tagchecklist li')
-            .map((_, el) =>
-              $(el)
-                .contents()
-                .filter((_, node) => node.nodeType === 3)
-                .text()
-                .trim(),
-            )
-            .get();
+  $('[data-id="required_tags"], [data-requirement-type="required_tags"]').each(function() {
+    var $element = $(this);
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        let obj = PP_Checklists.is_gutenberg_active()
+          ? PP_Checklists.getEditor().getEditedPostAttribute('tags')
+          : $('.tagchecklist li')
+              .map((_, el) =>
+                $(el)
+                  .contents()
+                  .filter((_, node) => node.nodeType === 3)
+                  .text()
+                  .trim(),
+              )
+              .get();
+  
+        if (typeof obj !== 'undefined') {
+          let { value: required_tags, label } = ppChecklists.requirements[originalId];
+          let required_tags_reached =
+            required_tags.length > 0
+              ? required_tags.filter((value) => {
+                  if (PP_Checklists.is_gutenberg_active()) return !obj.includes(Number(value.split('__')[0]));
+                  return !obj.includes(value.split('__')[1]);
+                })
+              : [];
+          let has_required_tags = required_tags_reached.length > 0;
+  
+          const labelEl = $element.find('.status-label');
+          const current_label_text = label.replace(/:.*/, '');
+          const required_tags_str = required_tags_reached.map((el) => el.split('__')[1]).join(', ');
+          const final_label_text =
+            required_tags_str.length > 0 ? `${current_label_text}: ${required_tags_str} ` : `${current_label_text} `;
+  
+          $element.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_required_tags);
+          // Need to update the text node directly because the element has a span inside
+          labelEl
+            .contents()
+            .filter(function () {
+              return this.nodeType === 3; // Node type 3 is a text node
+            })
+            .first()
+            .each(function () {
+              // Modify the text node
+              this.nodeValue = final_label_text;
+            });
+        }
+      });
+    }
+  });
 
-      if (typeof obj !== 'undefined') {
-        let { value: required_tags, label } = ppChecklists.requirements.required_tags;
-        let required_tags_reached =
-          required_tags.length > 0
-            ? required_tags.filter((value) => {
-                if (PP_Checklists.is_gutenberg_active()) return !obj.includes(Number(value.split('__')[0]));
-                return !obj.includes(value.split('__')[1]);
-              })
-            : [];
-        let has_required_tags = required_tags_reached.length > 0;
+  /*----------  Prohibited Tags - Dynamic Validation ----------*/
 
-        const el = $('#pp-checklists-req-required_tags');
-        const labelEl = el.find('.status-label');
-        const current_label_text = label.replace(/:.*/, '');
-        const required_tags_str = required_tags_reached.map((el) => el.split('__')[1]).join(', ');
-        const final_label_text =
-          required_tags_str.length > 0 ? `${current_label_text}: ${required_tags_str} ` : `${current_label_text} `;
+  $('[data-id="prohibited_tags"], [data-requirement-type="prohibited_tags"]').each(function() {
+    var $element = $(this);
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        let obj = PP_Checklists.is_gutenberg_active()
+          ? PP_Checklists.getEditor().getEditedPostAttribute('tags')
+          : $('.tagchecklist li')
+              .map((_, el) =>
+                $(el)
+                  .contents()
+                  .filter((_, node) => node.nodeType === 3)
+                  .text()
+                  .trim(),
+              )
+              .get();
+  
+        if (typeof obj !== 'undefined') {
+          let { value: prohibited_tags, label } = ppChecklists.requirements[originalId];
+          let prohibited_tags_reached =
+            prohibited_tags.length > 0
+              ? prohibited_tags.filter((value) => {
+                  if (PP_Checklists.is_gutenberg_active()) return obj.includes(Number(value.split('__')[0]));
+                  return obj.includes(value.split('__')[1]);
+                })
+              : [];
+          let has_prohibited_tags = prohibited_tags_reached.length > 0;
+  
+          const labelEl = $element.find('.status-label');
+          const current_label_text = label.replace(/:.*/, '');
+          const prohibited_tags_str = prohibited_tags_reached.map((el) => el.split('__')[1]).join(', ');
+          const final_label_text =
+            prohibited_tags_str.length > 0 ? `${current_label_text}: ${prohibited_tags_str} ` : `${current_label_text} `;
+  
+          // Update the requirement label in the global object
+          if (originalId === 'prohibited_tags') {
+            ppChecklists = {
+              ...ppChecklists,
+              requirements: {
+                ...ppChecklists.requirements,
+                prohibited_tags: {
+                  ...ppChecklists.requirements.prohibited_tags,
+                  label: final_label_text,
+                },
+              },
+            };
+          }
+          
+          $element.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_prohibited_tags);
+          // Need to update the text node directly because the element has a span inside
+          labelEl
+            .contents()
+            .filter(function () {
+              return this.nodeType === 3; // Node type 3 is a text node
+            })
+            .first()
+            .each(function () {
+              // Modify the text node
+              this.nodeValue = final_label_text;
+            });
+        }
+      });
+    }
+  });
 
-        el.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_required_tags);
-        // Need to update the text node directly because the element has a span inside
-        labelEl
-          .contents()
-          .filter(function () {
-            return this.nodeType === 3; // Node type 3 is a text node
-          })
-          .first()
-          .each(function () {
-            // Modify the text node
-            this.nodeValue = final_label_text;
-          });
-      }
-    });
-  }
+  /*----------  Categories Number - Dynamic Validation ----------*/
 
-  /*----------  Prohibited Tags  ----------*/
+  $('[data-id="categories_count"], [data-requirement-type="categories_count"]').each(function() {
+    var $element = $(this);
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        var count = 0,
+          min_value = parseInt(ppChecklists.requirements[originalId].value[0]),
+          max_value = parseInt(ppChecklists.requirements[originalId].value[1]);
+  
+        if (PP_Checklists.is_gutenberg_active()) {
+          // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
+          var obj = PP_Checklists.getEditor().getEditedPostAttribute('categories');
+        } else {
+          var obj = $('#categorychecklist input:checked:not(.rank-math-make-primary)');
+        }
+  
+        if (typeof obj !== 'undefined') {
+          count = obj.length;
+  
+          $element.trigger(
+            PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+            PP_Checklists.check_valid_quantity(count, min_value, max_value),
+          );
+        }
+      });
+    }
+  });
 
-  if ($('#pp-checklists-req-prohibited_tags').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      let obj = PP_Checklists.is_gutenberg_active()
-        ? PP_Checklists.getEditor().getEditedPostAttribute('tags')
-        : $('.tagchecklist li')
-            .map((_, el) =>
-              $(el)
-                .contents()
-                .filter((_, node) => node.nodeType === 3)
-                .text()
-                .trim(),
-            )
-            .get();
+  /*----------  Required Categories - Dynamic Validation ----------*/
 
-      if (typeof obj !== 'undefined') {
-        let { value: prohibited_tags, label } = ppChecklists.requirements.prohibited_tags;
-        let prohibited_tags_reached =
-          prohibited_tags.length > 0
-            ? prohibited_tags.filter((value) => {
-                if (PP_Checklists.is_gutenberg_active()) return obj.includes(Number(value.split('__')[0]));
-                return obj.includes(value.split('__')[1]);
-              })
-            : [];
-        let has_prohibited_tags = prohibited_tags_reached.length > 0;
-
-        const el = $('#pp-checklists-req-prohibited_tags');
-        const labelEl = el.find('.status-label');
-        const current_label_text = label.replace(/:.*/, '');
-        const prohibited_tags_str = prohibited_tags_reached.map((el) => el.split('__')[1]).join(', ');
-        const final_label_text =
-          prohibited_tags_str.length > 0 ? `${current_label_text}: ${prohibited_tags_str} ` : `${current_label_text} `;
-
-        ppChecklists = {
-          ...ppChecklists,
-          requirements: {
-            ...ppChecklists.requirements,
-            prohibited_tags: {
-              ...ppChecklists.requirements.prohibited_tags,
-              label: final_label_text,
-            },
-          },
-        };
-        el.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_prohibited_tags);
-        // Need to update the text node directly because the element has a span inside
-        labelEl
-          .contents()
-          .filter(function () {
-            return this.nodeType === 3; // Node type 3 is a text node
-          })
-          .first()
-          .each(function () {
-            // Modify the text node
-            this.nodeValue = final_label_text;
-          });
-      }
-    });
-  }
-
-  /*----------  Categories Number  ----------*/
-
-  if ($('#pp-checklists-req-categories_count').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      var count = 0,
-        min_value = parseInt(ppChecklists.requirements.categories_count.value[0]),
-        max_value = parseInt(ppChecklists.requirements.categories_count.value[1]);
-
-      if (PP_Checklists.is_gutenberg_active()) {
-        // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
-        var obj = PP_Checklists.getEditor().getEditedPostAttribute('categories');
-      } else {
-        var obj = $('#categorychecklist input:checked:not(.rank-math-make-primary)');
-      }
-
-      if (typeof obj !== 'undefined') {
-        count = obj.length;
-
-        $('#pp-checklists-req-categories_count').trigger(
-          PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
-          PP_Checklists.check_valid_quantity(count, min_value, max_value),
-        );
-      }
-    });
-  }
-
-  /*----------  Required Categories  ----------*/
-
-  if ($('#pp-checklists-req-required_categories').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      let obj = PP_Checklists.is_gutenberg_active()
-        ? PP_Checklists.getEditor().getEditedPostAttribute('categories')
-        : $('#categorychecklist input:checked')
-            .map((_, chkEl) => Number($(chkEl).val()))
-            .get();
-
-      if (typeof obj !== 'undefined') {
-        let { value: required_categories, label } = ppChecklists.requirements.required_categories;
-        let required_categories_reached =
-          required_categories.length > 0
-            ? required_categories.filter((value) => !obj.includes(Number(value.split('__')[0])))
-            : [];
-        let has_required_categories = required_categories_reached.length > 0;
-
-        const el = $('#pp-checklists-req-required_categories');
-        const labelEl = el.find('.status-label');
-        const current_label_text = label.replace(/:.*/, '');
-        const required_categories_str = required_categories_reached.map((el) => el.split('__')[1]).join(', ');
-        const final_label_text =
+  $('[data-id="required_categories"], [data-requirement-type="required_categories"]').each(function() {
+    var $element = $(this);
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        let obj = PP_Checklists.is_gutenberg_active()
+          ? PP_Checklists.getEditor().getEditedPostAttribute('categories')
+          : $('#categorychecklist input:checked')
+              .map((_, chkEl) => Number($(chkEl).val()))
+              .get();
+  
+        if (typeof obj !== 'undefined') {
+          let { value: required_categories, label } = ppChecklists.requirements[originalId];
+          let required_categories_reached =
+            required_categories.length > 0
+              ? required_categories.filter((value) => !obj.includes(Number(value.split('__')[0])))
+              : [];
+          let has_required_categories = required_categories_reached.length > 0;
+  
+          const labelEl = $element.find('.status-label');
+          const current_label_text = label.replace(/:.*/, '');
+          const required_categories_str = required_categories_reached.map((el) => el.split('__')[1]).join(', ');
+          const final_label_text =
           required_categories_str.length > 0
             ? `${current_label_text}: ${required_categories_str} `
             : `${current_label_text} `;
 
-        el.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_required_categories);
+        $element.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_required_categories);
         // Need to update the text node directly because the element has a span inside
         labelEl
           .contents()
@@ -1374,55 +1394,62 @@
     });
   }
 
-  /*----------  Prohibited Categories  ----------*/
+  /*----------  Prohibited Categories - Dynamic Validation ----------*/
 
-  if ($('#pp-checklists-req-prohibited_categories').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      let obj = PP_Checklists.is_gutenberg_active()
-        ? PP_Checklists.getEditor().getEditedPostAttribute('categories')
-        : $('#categorychecklist input:checked')
-            .map((_, chkEl) => Number($(chkEl).val()))
-            .get();
-
-      if (typeof obj !== 'undefined') {
-        let { value: prohibited_categories, label } = ppChecklists.requirements.prohibited_categories;
-        let prohibited_categories_reached =
-          prohibited_categories.length > 0
-            ? prohibited_categories.filter((value) => obj.includes(Number(value.split('__')[0])))
-            : [];
-        let has_prohibited_categories = prohibited_categories_reached.length > 0;
-
-        const el = $('#pp-checklists-req-prohibited_categories');
-        const labelEl = el.find('.status-label');
-        const current_label_text = label.replace(/:.*/, '');
-        const prohibited_categories_str = prohibited_categories_reached.map((el) => el.split('__')[1]).join(', ');
-        const final_label_text =
-          prohibited_categories_str.length > 0
-            ? `${current_label_text}: ${prohibited_categories_str} `
-            : `${current_label_text} `;
-
-        ppChecklists = {
-          ...ppChecklists,
-          requirements: {
-            ...ppChecklists.requirements,
-            prohibited_categories: {
-              ...ppChecklists.requirements.prohibited_categories,
-              label: final_label_text,
-            },
-          },
-        };
-        el.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_prohibited_categories);
-        // Need to update the text node directly because the element has a span inside
-        labelEl
-          .contents()
-          .filter(function () {
-            return this.nodeType === 3; // Node type 3 is a text node
-          })
-          .first()
-          .each(function () {
-            // Modify the text node
-            this.nodeValue = final_label_text;
-          });
+  $('[data-id="prohibited_categories"], [data-requirement-type="prohibited_categories"]').each(function() {
+    var $element = $(this);
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        let obj = PP_Checklists.is_gutenberg_active()
+          ? PP_Checklists.getEditor().getEditedPostAttribute('categories')
+          : $('#categorychecklist input:checked')
+              .map((_, chkEl) => Number($(chkEl).val()))
+              .get();
+  
+        if (typeof obj !== 'undefined') {
+          let { value: prohibited_categories, label } = ppChecklists.requirements[originalId];
+          let prohibited_categories_reached =
+            prohibited_categories.length > 0
+              ? prohibited_categories.filter((value) => obj.includes(Number(value.split('__')[0])))
+              : [];
+          let has_prohibited_categories = prohibited_categories_reached.length > 0;
+  
+          const labelEl = $element.find('.status-label');
+          const current_label_text = label.replace(/:.*/, '');
+          const prohibited_categories_str = prohibited_categories_reached.map((el) => el.split('__')[1]).join(', ');
+          const final_label_text =
+            prohibited_categories_str.length > 0
+              ? `${current_label_text}: ${prohibited_categories_str} `
+              : `${current_label_text} `;
+  
+          // Update the requirement label in the global object
+          if (originalId === 'prohibited_categories') {
+            ppChecklists = {
+              ...ppChecklists,
+              requirements: {
+                ...ppChecklists.requirements,
+                prohibited_categories: {
+                  ...ppChecklists.requirements.prohibited_categories,
+                  label: final_label_text,
+                },
+              },
+            };
+          }
+          
+          $element.trigger(PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE, !has_prohibited_categories);
+          // Need to update the text node directly because the element has a span inside
+          labelEl
+            .contents()
+            .filter(function () {
+              return this.nodeType === 3; // Node type 3 is a text node
+            })
+            .first()
+            .each(function () {
+              // Modify the text node
+              this.nodeValue = final_label_text;
+            });
       }
     });
   }
@@ -1519,69 +1546,80 @@
     });
   }
 
-  /*----------  Title Count  ----------*/
+  /*----------  Title Count - Dynamic Validation  ----------*/
 
-  if ($('#pp-checklists-req-title_count').length > 0) {
-    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
-      var count = 0,
-        obj = null,
-        min_value = parseInt(ppChecklists.requirements.title_count.value[0]),
-        max_value = parseInt(ppChecklists.requirements.title_count.value[1]);
+  $('[data-id="title_count"], [data-requirement-type="title_count"]').each(function() {
+    var $element = $(this);
+    var requirementId = $element.attr('id');
+    var originalId = $element.data('requirement-type') || $element.data('id');
+    
+    if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+      $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+        var count = 0,
+          obj = null,
+          min_value = parseInt(ppChecklists.requirements[originalId].value[0]),
+          max_value = parseInt(ppChecklists.requirements[originalId].value[1]);
 
-      if (PP_Checklists.is_gutenberg_active()) {
-        // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
-        obj = wp.htmlEntities.decodeEntities(PP_Checklists.getEditor().getEditedPostAttribute('title'));
-      } else {
-        if ($('#title').length === 0) {
-          return;
+        if (PP_Checklists.is_gutenberg_active()) {
+          // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
+          obj = wp.htmlEntities.decodeEntities(PP_Checklists.getEditor().getEditedPostAttribute('title'));
+        } else {
+          if ($('#title').length === 0) {
+            return;
+          }
+
+          obj = $('#title').val();
         }
 
-        obj = $('#title').val();
-      }
+        if (typeof obj !== 'undefined') {
+          count = obj.length;
 
-      if (typeof obj !== 'undefined') {
-        count = obj.length;
+          $element.trigger(
+            PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+            PP_Checklists.check_valid_quantity(count, min_value, max_value),
+          );
+        }
+      });
+    }
+  });
 
-        $('#pp-checklists-req-title_count').trigger(
-          PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
-          PP_Checklists.check_valid_quantity(count, min_value, max_value),
-        );
-      }
-    });
-  }
-
-  /*----------  Word Count ----------*/
+  /*----------  Word Count - Dynamic Validation ----------*/
   var lastCount = 0;
   if (PP_Checklists.is_gutenberg_active()) {
     /**
      * For Gutenberg
      */
-    if ($('#pp-checklists-req-words_count').length > 0) {
-      wp.data.subscribe(function () {
-        // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
-        var content = PP_Checklists.getEditor().getEditedPostAttribute('content');
-
-        if (typeof content == 'undefined') {
-          return;
-        }
-
-        var count = wp.utils.WordCounter.prototype.count(content);
-
-        if (lastCount == count) {
-          return;
-        }
-
-        var min = parseInt(ppChecklists.requirements.words_count.value[0]),
-          max = parseInt(ppChecklists.requirements.words_count.value[1]);
-
-        $('#pp-checklists-req-words_count').trigger(
-          PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
-          PP_Checklists.check_valid_quantity(count, min, max),
-        );
-
-        lastCount = count;
-      });
-    }
+    $('[data-id="words_count"], [data-requirement-type="words_count"]').each(function() {
+      var $element = $(this);
+      var originalId = $element.data('requirement-type') || $element.data('id');
+      
+      if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+        wp.data.subscribe(function () {
+          // @todo: why does Multiple Authors "Remove author from new posts" setting cause this to return null?
+          var content = PP_Checklists.getEditor().getEditedPostAttribute('content');
+  
+          if (typeof content == 'undefined') {
+            return;
+          }
+  
+          var count = wp.utils.WordCounter.prototype.count(content);
+  
+          if (lastCount == count) {
+            return;
+          }
+  
+          var min = parseInt(ppChecklists.requirements[originalId].value[0]),
+            max = parseInt(ppChecklists.requirements[originalId].value[1]);
+  
+          $element.trigger(
+            PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+            PP_Checklists.check_valid_quantity(count, min, max),
+          );
+  
+          lastCount = count;
+        });
+      }
+    });
   } else {
     /**
      * For the Classic Editor
@@ -1590,59 +1628,62 @@
     var lastCount = 0;
     var editor;
 
-    /**
-     * Get the words count from TinyMCE and update the status of the requirement
-     */
-    function update() {
-      var text, count;
-
-      if (typeof ppChecklists.requirements.words_count === 'undefined') {
-        return;
-      }
-
-      if (typeof editor == 'undefined' || !editor || editor.isHidden()) {
-        // For the text tab.
-        text = $content.val();
-      } else {
-        // For the editor tab.
-        text = editor.getContent({ format: 'raw' });
-      }
-
-      count = counter.count(text);
-
-      if (lastCount === count) {
-        return;
-      }
-
-      var min = parseInt(ppChecklists.requirements.words_count.value[0]),
-        max = parseInt(ppChecklists.requirements.words_count.value[1]);
-
-      $('#pp-checklists-req-words_count').trigger(
-        PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
-        PP_Checklists.check_valid_quantity(count, min, max),
-      );
-
-      lastCount = count;
-    }
-
-    // For the editor.
-    $(document).on(PP_Checklists.EVENT_TINYMCE_LOADED, function (event, tinymce) {
-      editor = tinymce.editors['content'];
-
-      if (typeof editor !== 'undefined') {
-        editor.onInit.add(function () {
-          /**
-           * Bind the words count update triggers.
-           *
-           * When a node change in the main TinyMCE editor has been triggered.
-           * When a key has been released in the plain text content editor.
-           */
-
-          if (editor.id !== 'content') {
+    $('[data-id="words_count"], [data-requirement-type="words_count"]').each(function() {
+      var $element = $(this);
+      var originalId = $element.data('requirement-type') || $element.data('id');
+      
+      if (typeof ppChecklists.requirements[originalId] !== 'undefined') {
+        /**
+         * Get the words count from TinyMCE and update the status of the requirement
+         */
+        function update() {
+          var text, count;
+    
+          if (typeof editor == 'undefined' || !editor || editor.isHidden()) {
+            // For the text tab.
+            text = $content.val();
+          } else {
+            // For the editor tab.
+            text = editor.getContent({ format: 'raw' });
+          }
+    
+          count = counter.count(text);
+    
+          if (lastCount === count) {
             return;
           }
+    
+          var min = parseInt(ppChecklists.requirements[originalId].value[0]),
+            max = parseInt(ppChecklists.requirements[originalId].value[1]);
+    
+          $element.trigger(
+            PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+            PP_Checklists.check_valid_quantity(count, min, max),
+          );
+    
+          lastCount = count;
+        }
 
-          editor.on('nodechange keyup', _.debounce(update, 500));
+        // For the editor.
+        $(document).on(PP_Checklists.EVENT_TINYMCE_LOADED, function (event, tinymce) {
+          editor = tinymce.editors['content'];
+
+          if (typeof editor !== 'undefined') {
+            editor.onInit.add(function () {
+              /**
+               * Bind the words count update triggers.
+               *
+               * When a node change in the main TinyMCE editor has been triggered.
+               * When a key has been released in the plain text content editor.
+               */
+
+              if (editor.id !== 'content') {
+                return;
+              }
+
+              editor.on('nodechange keyup', _.debounce(update, 500));
+            });
+          }
         });
       }
     });

@@ -211,7 +211,7 @@
      * @param  {string} postType - Post type for the requirement
      */
     function duplicate_requirement(originalId, postType) {
-      var newId = uidGen(15);
+      var newId = originalId + '_copy_' + uidGen(8);
       
       var $originalRow = $('tr[data-id="' + originalId + '"][data-post-type="' + postType + '"]');
       
@@ -219,151 +219,143 @@
         return;
       }
       
-      // Get original requirement title and configuration
+      // Get the original requirement type and all configuration
+      var originalType = $originalRow.data('type') || 'custom';
       var originalTitle = $originalRow.find('td:first-child input, td:first-child textarea').val() || $originalRow.find('td:first-child').text().trim();
       var originalRule = $originalRow.find('select[name*="_rule"] option:selected').val();
       
-      // Extract min/max values - these could be in input fields or in the label text for built-in requirements
-      var originalMinValue = '';
-      var originalMaxValue = '';
+      // Extract configuration based on requirement type
+      var config = extractRequirementConfig($originalRow, originalType);
       
+      var duplicatedTitle = originalTitle;
+      if (duplicatedTitle.match(/\(\d+\)$/)) {
+        duplicatedTitle = duplicatedTitle.replace(/\((\d+)\)$/, function(match, number) {
+          return '(' + (parseInt(number) + 1) + ')';
+        });
+      } else {
+        duplicatedTitle += ' (2)';
+      }
+      
+      createDuplicatedRow(newId, duplicatedTitle, originalRule, postType, originalType, config, originalId);
+    }
+    
+    /**
+     * Extract configuration from original requirement row
+     */
+    function extractRequirementConfig($originalRow, originalType) {
+      var config = {
+        minValue: '',
+        maxValue: '',
+        editableBy: [],
+        canIgnore: [],
+        multipleValues: {}
+      };
+      
+      // Extract min/max values for counter types
       var $minInput = $originalRow.find('input[name*="_min"]');
       var $maxInput = $originalRow.find('input[name*="_max"]');
       
       if ($minInput.length > 0) {
-        originalMinValue = $minInput.val() || '';
+        config.minValue = $minInput.val() || '';
       }
-      
       if ($maxInput.length > 0) {
-        originalMaxValue = $maxInput.val() || '';
+        config.maxValue = $maxInput.val() || '';
       }
       
-      // If no input fields found, try to extract from the label text for built-in requirements
-      if (originalMinValue === '' && originalMaxValue === '') {
+      // If no input fields, extract from label text for built-in requirements
+      if (config.minValue === '' && config.maxValue === '') {
         var labelText = $originalRow.find('td:first-child').text().trim();
+        var patterns = [
+          { regex: /(?:minimum|at least|min\.?)\s+(\d+)/i, type: 'min' },
+          { regex: /(?:maximum|up to|max\.?)\s+(\d+)/i, type: 'max' },
+          { regex: /exactly\s+(\d+)/i, type: 'exact' },
+          { regex: /between\s+(\d+)\s+and\s+(\d+)/i, type: 'between' }
+        ];
         
-        var minMatch = labelText.match(/(?:minimum|at least|min\.?)\s+(\d+)/i);
-        if (minMatch && minMatch[1]) {
-          originalMinValue = minMatch[1];
-        }
-        
-        var maxMatch = labelText.match(/(?:maximum|up to|max\.?)\s+(\d+)/i);
-        if (maxMatch && maxMatch[1]) {
-          originalMaxValue = maxMatch[1];
-        }
-        
-        var exactMatch = labelText.match(/exactly\s+(\d+)/i);
-        if (exactMatch && exactMatch[1]) {
-          originalMinValue = exactMatch[1];
-          originalMaxValue = exactMatch[1];
-        }
-        
-        var betweenMatch = labelText.match(/between\s+(\d+)\s+and\s+(\d+)/i);
-        if (betweenMatch && betweenMatch[1] && betweenMatch[2]) {
-          originalMinValue = betweenMatch[1];
-          originalMaxValue = betweenMatch[2];
-        }
-      }
-      
-      var originalEditableBy = $originalRow.find('select[name*="_editable_by"]').val() || [];
-      var originalCanIgnore = $originalRow.find('select[name*="_can_ignore"]').val() || [];
-      
-      // Check if this is a custom item or built-in requirement
-      var isCustomItem = $originalRow.find('input[name*="_title"]').length > 0;
-      var isOpenAIItem = $originalRow.find('textarea[name*="_title"]').length > 0;
-      var requirementType = isOpenAIItem ? 'openai' : 'custom';
-      var hasMinMax = originalMinValue !== '' || originalMaxValue !== '';
-      
-      var hasMultipleOptions = $originalRow.find('select[multiple]').length > 0;
-      var multipleValues = {};
-      
-      if (hasMultipleOptions) {
-        $originalRow.find('select[multiple]').each(function() {
-          var fieldName = $(this).attr('name').match(/\[(.*?)\]/);
-          if (fieldName && fieldName[1]) {
-            multipleValues[fieldName[1]] = $(this).val() || [];
+        patterns.forEach(function(pattern) {
+          var match = labelText.match(pattern.regex);
+          if (match) {
+            if (pattern.type === 'exact') {
+              config.minValue = config.maxValue = match[1];
+            } else if (pattern.type === 'between') {
+              config.minValue = match[1];
+              config.maxValue = match[2];
+            } else if (pattern.type === 'min') {
+              config.minValue = match[1];
+            } else if (pattern.type === 'max') {
+              config.maxValue = match[1];
+            }
           }
         });
       }
       
-      var duplicatedTitle = originalTitle + ' (Copy)';
+      // Extract role permissions
+      config.editableBy = $originalRow.find('select[name*="_editable_by"]').val() || [];
+      config.canIgnore = $originalRow.find('select[name*="_can_ignore"]').val() || [];
       
-      if (isCustomItem || isOpenAIItem) {
-        create_row(newId, duplicatedTitle, originalRule, postType, requirementType, hasMinMax);
-        
-        // Set the duplicated configuration values
-        var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
-        
-        $newRow.find('select[name*="_rule"]').val(originalRule);
-        
-        if (originalMinValue) {
-          $newRow.find('input[name*="_min"]').val(originalMinValue);
+      // Extract multiple field values
+      $originalRow.find('select[multiple]').each(function() {
+        var fieldName = $(this).attr('name').match(/\[(.*?)\]/);
+        if (fieldName && fieldName[1]) {
+          config.multipleValues[fieldName[1]] = $(this).val() || [];
         }
-        if (originalMaxValue) {
-          $newRow.find('input[name*="_max"]').val(originalMaxValue);
-        }
-        
-        if (originalEditableBy && originalEditableBy.length > 0) {
-          $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
-        }
-        
-        if (originalCanIgnore && originalCanIgnore.length > 0) {
-          $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
-        }
-        
-        if (hasMultipleOptions) {
-          for (var fieldName in multipleValues) {
-            var $select = $newRow.find('select[name*="[' + fieldName + ']"]');
-            if ($select.length > 0 && multipleValues[fieldName].length > 0) {
-              $select.val(multipleValues[fieldName]);
-            }
-          }
-        }
-        
-        // Re-initialize select2 for the new row
-        $newRow.find('select').select2();
-        
-        // Show the custom group
-        $('.ppch-custom-group').show();
-      } else {
-        // For built-in requirements, create a custom item with similar configuration
-        create_row(newId, duplicatedTitle, originalRule, postType, 'custom', hasMinMax);
-        
-        // Set the duplicated configuration values
-        var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
-        
-        $newRow.find('select[name*="_rule"]').val(originalRule);
-        
-        if (originalMinValue) {
-          $newRow.find('input[name*="_min"]').val(originalMinValue);
-        }
-        if (originalMaxValue) {
-          $newRow.find('input[name*="_max"]').val(originalMaxValue);
-        }
-        
-        if (originalEditableBy && originalEditableBy.length > 0) {
-          $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
-        }
-        
-        if (originalCanIgnore && originalCanIgnore.length > 0) {
-          $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
-        }
-        
-        if (hasMultipleOptions) {
-          for (var fieldName in multipleValues) {
-            var $select = $newRow.find('select[name*="[' + fieldName + ']"]');
-            if ($select.length > 0 && multipleValues[fieldName].length > 0) {
-              $select.val(multipleValues[fieldName]);
-            }
-          }
-        }
-        
-        // Re-initialize select2 for the new row
-        $newRow.find('select').select2();
-        
-        // Show the custom group
-        $('.ppch-custom-group').show();
+      });
+      
+      return config;
+    }
+    
+    /**
+     * Create a duplicated requirement row with preserved type information
+     */
+    function createDuplicatedRow(newId, title, rule, postType, originalType, config, originalId) {
+      // For built-in requirements, we need to create a custom item that mimics the original
+      var requirementType = (originalType === 'counter' || originalType === 'simple' || originalType === 'multiple') ? 'custom' : originalType;
+      var hasMinMax = config.minValue !== '' || config.maxValue !== '';
+      
+      create_row(newId, title, rule, postType, requirementType, hasMinMax);
+      
+      var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
+      
+      $newRow.attr('data-original-type', originalType);
+      $newRow.attr('data-original-id', originalId);
+      $newRow.attr('data-requirement-type', originalId.replace(/_copy_.*$/, ''));
+      $newRow.addClass('pp-checklists-duplicated-requirement');
+      
+      // Apply configuration
+      applyRequirementConfig($newRow, config);
+      
+      // Show the custom group
+      $('.ppch-custom-group').show();
+    }
+    
+    /**
+     * Apply extracted configuration to the new row
+     */
+    function applyRequirementConfig($row, config) {
+      if (config.minValue) {
+        $row.find('input[name*="_min"]').val(config.minValue);
       }
+      if (config.maxValue) {
+        $row.find('input[name*="_max"]').val(config.maxValue);
+      }
+      
+      if (config.editableBy && config.editableBy.length > 0) {
+        $row.find('select[name*="_editable_by"]').val(config.editableBy);
+      }
+      
+      if (config.canIgnore && config.canIgnore.length > 0) {
+        $row.find('select[name*="_can_ignore"]').val(config.canIgnore);
+      }
+      
+      for (var fieldName in config.multipleValues) {
+        var $select = $row.find('select[name*="[' + fieldName + ']"]');
+        if ($select.length > 0 && config.multipleValues[fieldName].length > 0) {
+          $select.val(config.multipleValues[fieldName]);
+        }
+      }
+      
+      // Re-initialize select2
+      $row.find('select').select2();
     }
 
     /**
