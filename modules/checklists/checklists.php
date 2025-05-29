@@ -1287,117 +1287,112 @@ if (!class_exists('PPCH_Checklists')) {
         /**
          * Handles AJAX request for duplicating a checklist item.
          */
-        public function ajax_duplicate_checklist_handler()
-        {
-            if (!isset($_POST['_ajax_pp_checklists_duplicate_nonce'])) {
-                wp_send_json_error(['message' => esc_html__('Nonce not provided.', 'publishpress-checklists')], 403);
-                die();
-            }
+public function ajax_duplicate_checklist_handler()
+{
+    if (!check_ajax_referer('pp_checklists_duplicate_nonce', '_ajax_pp_checklists_duplicate_nonce', false)) {
+        wp_send_json_error(['message' => __('Nonce verification failed.', 'publishpress-checklists')], 403);
+        die();
+    }
 
-            if (!check_ajax_referer('pp_checklists_duplicate_nonce', '_ajax_pp_checklists_duplicate_nonce', false)) {
-                wp_send_json_error(['message' => esc_html__('Nonce verification failed.', 'publishpress-checklists')], 403);
-                die();
-            }
+    $manage_cap = apply_filters('publishpress_checklists_manage_checklist_cap', 'manage_checklists');
+    if (!current_user_can($manage_cap)) {
+        wp_send_json_error(['message' => __('You do not have permission to manage checklists.', 'publishpress-checklists')], 403);
+        die();
+    }
 
-            $manage_cap = apply_filters('publishpress_checklists_manage_checklist_cap', 'manage_checklists');
-            if (!current_user_can($manage_cap)) {
-                wp_send_json_error(['message' => esc_html__('User does not have permission to manage checklists.', 'publishpress-checklists')], 403);
-                die();
-            }
+    if (!isset($_POST['requirement_id'])) { // post_type from POST is not strictly needed here as we check original's config
+        wp_send_json_error(['message' => __('Missing requirement_id parameter.', 'publishpress-checklists')], 400);
+        die();
+    }
 
-            if (!isset($_POST['requirement_id']) || !isset($_POST['post_type'])) {
-                wp_send_json_error(['message' => esc_html__('Missing requirement_id or post_type.', 'publishpress-checklists')], 400);
-                die();
-            }
+    $original_id = sanitize_text_field($_POST['requirement_id']);
 
-            $original_id = sanitize_text_field(wp_unslash($_POST['requirement_id']));
-            // $post_type_context = sanitize_text_field(wp_unslash($_POST['post_type'])); // Not directly used for saving, but good for context if needed later.
+    $options = (array)get_option('publishpress_checklists_checklists_options', []);
+    $new_id = '';
 
-            $options = (array)get_option('publishpress_checklists_checklists_options', []);
+    $is_custom_task = (strpos($original_id, 'custom_') === 0);
+    $is_openai_task = (strpos($original_id, 'openai_') === 0);
 
-            $new_id    = '';
-            $task_type = ''; // 'custom' or 'openai'
+    if (!$is_custom_task && !$is_openai_task) {
+        wp_send_json_error(['message' => __('Only custom or OpenAI tasks can be duplicated at this time.', 'publishpress-checklists')]);
+        die();
+    }
 
-            if (strpos($original_id, 'custom_') === 0) {
-                $new_id    = uniqid('custom_');
-                $task_type = 'custom';
-            } elseif (strpos($original_id, 'openai_') === 0) {
-                $new_id    = uniqid('openai_');
-                $task_type = 'openai';
-            } else {
-                wp_send_json_error(['message' => esc_html__('Only custom or OpenAI tasks can be duplicated at this time.', 'publishpress-checklists')], 400);
-                die();
-            }
+    if ($is_custom_task) {
+        $new_id = uniqid('custom_');
+        if (!isset($options['custom_items']) || !is_array($options['custom_items'])) {
+            $options['custom_items'] = [];
+        }
+        $options['custom_items'][] = $new_id;
+    } elseif ($is_openai_task) {
+        $new_id = uniqid('openai_');
+        if (!isset($options['openai_items']) || !is_array($options['openai_items'])) {
+            $options['openai_items'] = [];
+        }
+        $options['openai_items'][] = $new_id;
+    }
 
-            // Add the new ID to the respective items list
-            if ($task_type === 'custom') {
-                if (!isset($options['custom_items']) || !is_array($options['custom_items'])) {
-                    $options['custom_items'] = [];
-                }
-                $options['custom_items'][] = $new_id;
-            } elseif ($task_type === 'openai') {
-                if (!isset($options['openai_items']) || !is_array($options['openai_items'])) {
-                    $options['openai_items'] = [];
-                }
-                $options['openai_items'][] = $new_id;
-            }
+    // Determine which post types the original task was configured for.
+    // A task is considered configured if it has a title set for that post type.
+    $original_configured_post_types = [];
+    if (isset($options[$original_id . '_title']) && is_array($options[$original_id . '_title'])) {
+        $original_configured_post_types = array_keys($options[$original_id . '_title']);
+    }
 
-            $available_post_types = array_keys($this->get_post_types());
-
-            foreach ($available_post_types as $pt_slug) {
-                // Copy title
-                $original_title_key = $original_id . '_title';
-                $new_title_key      = $new_id . '_title';
-                if (isset($options[$original_title_key][$pt_slug])) {
-                    $options[$new_title_key][$pt_slug] = sprintf(
-                        // translators: %s is the original title of the task.
-                        esc_html__('Copy of %s', 'publishpress-checklists'),
-                        $options[$original_title_key][$pt_slug]
-                    );
-                } elseif (isset($options[$original_title_key]) && is_string($options[$original_title_key]) && !is_array($options[$original_title_key])) { 
-                    // Handle non-post-type-specific titles (older format or global setting for this specific requirement)
-                     $options[$new_title_key][$pt_slug] = sprintf(
-                        esc_html__('Copy of %s', 'publishpress-checklists'),
-                        $options[$original_title_key]
-                    );
-                }
-
-
-                // Copy rule
-                $original_rule_key = $original_id . '_rule';
-                $new_rule_key      = $new_id . '_rule';
-                if (isset($options[$original_rule_key][$pt_slug])) {
-                    $options[$new_rule_key][$pt_slug] = $options[$original_rule_key][$pt_slug];
-                } elseif (isset($options[$original_rule_key]) && is_string($options[$original_rule_key]) && !is_array($options[$original_rule_key])) {
-                     $options[$new_rule_key][$pt_slug] = $options[$original_rule_key];
-                }
-
-                // Copy editable_by
-                $original_editable_by_key = $original_id . '_editable_by';
-                $new_editable_by_key      = $new_id . '_editable_by';
-                if (isset($options[$original_editable_by_key][$pt_slug])) {
-                    $options[$new_editable_by_key][$pt_slug] = $options[$original_editable_by_key][$pt_slug];
-                } elseif (isset($options[$original_editable_by_key]) && is_array($options[$original_editable_by_key])) { // Check if it's an array for global settings
-                    $options[$new_editable_by_key][$pt_slug] = $options[$original_editable_by_key];
-                }
-
-
-                // Copy OpenAI specific settings
-                if ($task_type === 'openai') {
-                    $original_prompt_response_key = $original_id . '_prompt_response';
-                    $new_prompt_response_key      = $new_id . '_prompt_response';
-                    if (isset($options[$original_prompt_response_key][$pt_slug])) {
-                        $options[$new_prompt_response_key][$pt_slug] = $options[$original_prompt_response_key][$pt_slug];
-                    } elseif (isset($options[$original_prompt_response_key]) && is_string($options[$original_prompt_response_key]) && !is_array($options[$original_prompt_response_key])) {
-                        $options[$new_prompt_response_key][$pt_slug] = $options[$original_prompt_response_key];
-                    }
-                }
-            }
-
-            update_option('publishpress_checklists_checklists_options', (object)$options);
-
-            wp_send_json_success(['message' => esc_html__('Checklist task duplicated successfully.', 'publishpress-checklists')]);
+    // If original_configured_post_types is empty, it means the task was not configured for any specific post type,
+    // or it used an old global setting. In this case, we cannot meaningfully duplicate it on a per-post-type basis.
+    // Earlier, we considered defaulting to all post types, but it's safer to require explicit configuration.
+    if (empty($original_configured_post_types)) {
+        // Check for a global title as a fallback (older tasks might have this)
+        if (isset($options[$original_id . '_title']) && is_string($options[$original_id . '_title'])) {
+            // If a global title exists, assume it was meant for all available post types.
+            $original_configured_post_types = array_keys($this->get_post_types());
+        } else {
+            wp_send_json_error(['message' => __('Original task is not configured for any specific post type or has no title. Cannot duplicate.', 'publishpress-checklists')]);
             die();
         }
+    }
+    
+    // Initialize arrays for the new item's settings
+    $options[$new_id . '_title'] = [];
+    $options[$new_id . '_rule'] = [];
+    $options[$new_id . '_editable_by'] = [];
+    if ($is_openai_task) {
+        $options[$new_id . '_prompt_response'] = [];
+    }
+
+    foreach ($original_configured_post_types as $pt_slug) {
+        // Title
+        $original_title_for_pt = isset($options[$original_id . '_title'][$pt_slug])
+                               ? $options[$original_id . '_title'][$pt_slug]
+                               : (isset($options[$original_id . '_title']) && is_string($options[$original_id . '_title']) ? $options[$original_id . '_title'] : $original_id); // Fallback to ID if no title
+        $options[$new_id . '_title'][$pt_slug] = sprintf(__('Copy of %s', 'publishpress-checklists'), $original_title_for_pt);
+
+        // Rule
+        $original_rule_for_pt = isset($options[$original_id . '_rule'][$pt_slug])
+                              ? $options[$original_id . '_rule'][$pt_slug]
+                              : (isset($options[$original_id . '_rule']) && is_string($options[$original_id . '_rule']) ? $options[$original_id . '_rule'] : 'warning'); // Default to 'warning'
+        $options[$new_id . '_rule'][$pt_slug] = $original_rule_for_pt;
+
+        // Editable By
+        $original_editable_by_for_pt = isset($options[$original_id . '_editable_by'][$pt_slug])
+                                     ? $options[$original_id . '_editable_by'][$pt_slug]
+                                     : (isset($options[$original_id . '_editable_by']) && is_array($options[$original_id . '_editable_by']) ? $options[$original_id . '_editable_by'] : []); // Default to empty array
+        $options[$new_id . '_editable_by'][$pt_slug] = $original_editable_by_for_pt;
+
+        // Prompt Response (for OpenAI tasks)
+        if ($is_openai_task) {
+            $original_prompt_response_for_pt = isset($options[$original_id . '_prompt_response'][$pt_slug])
+                                             ? $options[$original_id . '_prompt_response'][$pt_slug]
+                                             : (isset($options[$original_id . '_prompt_response']) && is_string($options[$original_id . '_prompt_response']) ? $options[$original_id . '_prompt_response'] : 'yes'); // Default to 'yes'
+            $options[$new_id . '_prompt_response'][$pt_slug] = $original_prompt_response_for_pt;
+        }
+    }
+
+    update_option('publishpress_checklists_checklists_options', (object)$options);
+
+    wp_send_json_success(['message' => __('Checklist duplicated successfully.', 'publishpress-checklists'), 'new_id' => $new_id]);
+    die();
+}
     }
 }
