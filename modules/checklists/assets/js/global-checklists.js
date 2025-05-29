@@ -205,6 +205,58 @@
     }
 
     /**
+     * Duplicate an existing requirement by cloning its configuration
+     *
+     * @param  {string} originalId - ID of the requirement to duplicate
+     * @param  {string} postType - Post type for the requirement
+     */
+    function duplicate_requirement(originalId, postType) {
+      var newId = uidGen(15);
+      
+      var $originalRow = $('tr[data-id="' + originalId + '"][data-post-type="' + postType + '"]');
+      
+      if ($originalRow.length === 0) {
+        return;
+      }
+      
+      var originalTitle = $originalRow.find('td:first-child').text().trim();
+      var originalRule = $originalRow.find('select[name*="_rule"] option:selected').val();
+      var originalMinValue = $originalRow.find('input[name*="_min"]').val() || '';
+      var originalMaxValue = $originalRow.find('input[name*="_max"]').val() || '';
+      var originalEditableBy = $originalRow.find('select[name*="_editable_by"]').val() || [];
+      var originalCanIgnore = $originalRow.find('select[name*="_can_ignore"]').val() || [];
+      
+      var duplicatedTitle = originalTitle + ' (Copy)';
+      create_row(newId, duplicatedTitle, originalRule, postType, 'custom');
+      
+      // Set the duplicated configuration values
+      var $newRow = $('tr[data-id="' + newId + '"][data-post-type="' + postType + '"]');
+      
+      $newRow.find('select[name*="_rule"]').val(originalRule);
+      
+      if (originalMinValue) {
+        $newRow.find('input[name*="_min"]').val(originalMinValue);
+      }
+      if (originalMaxValue) {
+        $newRow.find('input[name*="_max"]').val(originalMaxValue);
+      }
+      
+      if (originalEditableBy && originalEditableBy.length > 0) {
+        $newRow.find('select[name*="_editable_by"]').val(originalEditableBy);
+      }
+      
+      if (originalCanIgnore && originalCanIgnore.length > 0) {
+        $newRow.find('select[name*="_can_ignore"]').val(originalCanIgnore);
+      }
+      
+      // Re-initialize select2 for the new row
+      $newRow.find('select').select2();
+      
+      // Show the custom group
+      $('.ppch-custom-group').show();
+    }
+
+    /**
      * Create a row inside the requirements table
      *
      * @param  {string} title
@@ -383,6 +435,14 @@
     });
 
     $('.pp-checklists-remove-custom-item').on('click', callback_remove_row);
+
+    /*----------  Duplicate items  ----------*/
+    $(document).on('click', '.pp-checklists-duplicate-item', function (event) {
+      event.preventDefault();
+      var requirementId = $(this).data('id');
+      var postType = $(this).data('post-type');
+      duplicate_requirement(requirementId, postType);
+    });
 
     /*----------  Form validation  ----------*/
     $('#pp-checklists-global').submit(function () {

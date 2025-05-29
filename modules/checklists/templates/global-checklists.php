@@ -123,6 +123,12 @@
                                                     // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
                                                     echo $requirement->get_setting_field_html();
                                                     ?>
+                                                    <a href="javascript:void(0);" class="pp-checklists-duplicate-item button button-secondary" 
+                                                       data-id="<?php echo esc_attr($requirement->name); ?>" 
+                                                       data-post-type="<?php echo esc_attr($post_type); ?>"
+                                                       title="<?php echo esc_attr__('Duplicate', 'publishpress-checklists'); ?>">
+                                                        <span class="dashicons dashicons-admin-page"></span> <?php echo esc_html__('Duplicate', 'publishpress-checklists'); ?>
+                                                    </a>
                                                 </td>
                                             </tr>
                                     <?php

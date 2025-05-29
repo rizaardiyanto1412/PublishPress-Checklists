@@ -42,6 +42,70 @@
   /*----------  Handler  ----------*/
 
   /**
+   * Register dynamic validation for requirements based on ppChecklists.requirements data
+   */
+  function registerDynamicValidation() {
+    if (typeof ppChecklists === 'undefined' || !ppChecklists.requirements) {
+      return;
+    }
+    
+    $.each(ppChecklists.requirements, function(requirementKey, requirementData) {
+      var elementId = '#pp-checklists-req-' + requirementKey;
+      
+      if ($(elementId).length > 0) {
+        if (requirementData.type === 'counter' && requirementData.value && requirementData.value.length >= 2) {
+          registerCounterValidation(requirementKey, requirementData);
+        } else if (requirementData.type === 'simple') {
+          registerSimpleValidation(requirementKey, requirementData);
+        }
+      }
+    });
+  }
+  
+  /**
+   * Register validation for counter-type requirements (with min/max values)
+   */
+  function registerCounterValidation(requirementKey, requirementData) {
+    var elementId = '#pp-checklists-req-' + requirementKey;
+    var minValue = parseInt(requirementData.value[0]);
+    var maxValue = parseInt(requirementData.value[1]);
+    
+    $(document).on(PP_Checklists.EVENT_TIC, function (event) {
+      var count = 0;
+      var obj = null;
+      
+      if (requirementKey.includes('title_count')) {
+        if (PP_Checklists.is_gutenberg_active()) {
+          obj = wp.htmlEntities.decodeEntities(PP_Checklists.getEditor().getEditedPostAttribute('title'));
+        } else {
+          obj = $('#title').val();
+        }
+        if (typeof obj !== 'undefined') {
+          count = obj.length;
+        }
+      } else if (requirementKey.includes('words_count')) {
+        if (PP_Checklists.is_gutenberg_active()) {
+          var content = PP_Checklists.getEditor().getEditedPostAttribute('content');
+          if (typeof content !== 'undefined') {
+            count = wp.utils.WordCounter.prototype.count(content);
+          }
+        }
+      }
+      
+      $(elementId).trigger(
+        PP_Checklists.EVENT_UPDATE_REQUIREMENT_STATE,
+        PP_Checklists.check_valid_quantity(count, minValue, maxValue)
+      );
+    });
+  }
+  
+  /**
+   * Register validation for simple requirements
+   */
+  function registerSimpleValidation(requirementKey, requirementData) {
+  }
+
+  /**
    * Object for handling the requirements in the post form.
    * @type {Object}
    */
@@ -2062,4 +2126,9 @@
    * @deprecated
    */
   window.PP_Content_Checklist = PP_Checklists;
+
+  // Initialize dynamic validation for duplicated requirements
+  $(document).ready(function() {
+    registerDynamicValidation();
+  });
 })(jQuery, window, document, new wp.utils.WordCounter());
